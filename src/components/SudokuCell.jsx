@@ -10,6 +10,8 @@ const SudokuCell = ({
     prefilled,
     incorrect,
     hinted,
+    shadedSubgrid,
+    selected,
     highlighted,
     hintTarget,
     hintRelated,
@@ -20,14 +22,16 @@ const SudokuCell = ({
     const classNames = ['sudoku-cell'];
     if (prefilled) classNames.push('prefilled');
     if (hinted) classNames.push('hinted');
+    if (selected) classNames.push('selected-cell');
     if (incorrect) classNames.push('incorrect');
     if (highlighted) classNames.push('number-highlighted');
     if (notes.length > 0) classNames.push('notes-visible');
     if (hintTarget) classNames.push('hint-target');
     if (hintRelated) classNames.push('hint-related');
+    const wrapperClassName = `sudoku-cell-wrapper${shadedSubgrid ? ' shaded-subgrid' : ''}`;
 
     return (
-        <div className="sudoku-cell-wrapper">
+        <div className={wrapperClassName}>
             {value === 0 && notes.length > 0 && (
                 <div className="cell-notes" aria-label={`Notes: ${notes.join(', ')}`}>
                     {Array.from({ length: 9 }, (_, index) => (

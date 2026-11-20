@@ -10,6 +10,7 @@ const SudokuBoard = ({
     hintedCells,
     notes,
     selectedNumber,
+    selectedCell,
     hintTarget,
     hintRelatedCells,
     checked,
@@ -28,6 +29,7 @@ const SudokuBoard = ({
                         const prefilled = puzzle[row][col] !== EMPTY;
                         const value = board[row][col];
                         const hinted = hintedCells.includes(cellKey);
+                        const shadedSubgrid = (Math.floor(row / 3) + Math.floor(col / 3)) % 2 === 1;
 
                         return (
                             <SudokuCell
@@ -39,6 +41,8 @@ const SudokuBoard = ({
                                 selectedNumber={selectedNumber}
                                 prefilled={prefilled}
                                 hinted={hinted}
+                                shadedSubgrid={shadedSubgrid}
+                                selected={selectedCell?.row === row && selectedCell?.col === col}
                                 hintTarget={hintTarget === cellKey}
                                 hintRelated={hintRelatedCells.includes(cellKey)}
                                 highlighted={value !== EMPTY && value === selectedNumber}

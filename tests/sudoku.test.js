@@ -42,13 +42,14 @@ function createDeterministicRandom(initialSeed = 123456789) {
     };
 }
 
-function createGame({ scoreboardStorage } = {}) {
+function createGame({ scoreboardStorage, themeStorage } = {}) {
     let renderer;
     act(() => {
         renderer = TestRenderer.create(
             React.createElement(App, {
                 random: createDeterministicRandom(),
-                scoreboardStorage
+                scoreboardStorage,
+                themeStorage
             })
         );
     });
@@ -119,6 +120,48 @@ test('difficulty selector supports Easy, Medium, and Hard', () => {
 
     assert.deepEqual(DIFFICULTY_CLUES, expectedDifficultyClues);
     assert.deepEqual(options, Object.keys(expectedDifficultyClues));
+});
+
+test('theme toggle loads and saves the selected theme', () => {
+    const values = new Map([['sudoku-theme', 'dark']]);
+    const themeStorage = {
+        getItem: key => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value)
+    };
+    const renderer = createGame({ themeStorage });
+    const themeToggle = () => renderer.root.findByProps({ className: 'theme-toggle' });
+
+    assert.equal(themeToggle().props['aria-label'], 'Switch to light mode');
+    assert.equal(values.get('sudoku-theme'), 'dark');
+
+    act(() => themeToggle().props.onClick());
+
+    assert.equal(themeToggle().props['aria-label'], 'Switch to dark mode');
+    assert.equal(values.get('sudoku-theme'), 'light');
+});
+
+test('board uses alternating subgrid shading and marks the selected cell', () => {
+    const renderer = createGame();
+    const wrappers = renderer.root.findAll(node =>
+        node.props.className?.startsWith('sudoku-cell-wrapper')
+    );
+
+    assert.equal(wrappers.length, 81);
+    for (const [index, wrapper] of wrappers.entries()) {
+        const row = Math.floor(index / 9);
+        const col = index % 9;
+        const shouldBeShaded = (Math.floor(row / 3) + Math.floor(col / 3)) % 2 === 1;
+        assert.equal(wrapper.props.className.includes('shaded-subgrid'), shouldBeShaded);
+    }
+
+    act(() => getBoard(renderer).props.onFocus({
+        target: { dataset: { row: '0', col: '0' } }
+    }));
+
+    assert.equal(getCells(renderer)[0].props.className.includes('selected-cell'), true);
+    assert.equal(getCells(renderer).filter(cell =>
+        cell.props.className.includes('selected-cell')
+    ).length, 1);
 });
 
 test('each difficulty generates its expected clue count and one solution', () => {
