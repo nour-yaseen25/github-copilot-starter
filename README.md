@@ -9,7 +9,8 @@ Follow these instructions to get a copy of the project up and running on your lo
 ### Dependencies
 
 - Modern web browser (Chrome, Firefox, Edge, etc.)
-- No additional dependencies required
+- Node.js 18 or newer to run tests
+- No additional runtime dependencies required
 
 ### Installation
 
@@ -21,6 +22,14 @@ Follow these instructions to get a copy of the project up and running on your lo
 git clone https://github.com/your-username/<<name of your forked repo>>.git
 cd <<name of your forked repo>>
 # Open index.html in your browser
+```
+
+### Tests
+
+Run the baseline tests with:
+
+```bash
+npm test
 ```
 
 ## Project Instructions
