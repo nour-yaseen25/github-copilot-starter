@@ -1,5 +1,11 @@
 import { countSolutions, EMPTY, isSafe, SIZE } from './sudoku-solver.js';
 
+export const DIFFICULTY_CLUES = {
+    easy: 45,
+    medium: 35,
+    hard: 30
+};
+
 export const deepCopy = board => board.map(row => [...row]);
 
 export const createEmptyBoard = () =>

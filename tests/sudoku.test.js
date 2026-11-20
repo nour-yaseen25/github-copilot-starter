@@ -2,13 +2,21 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
+import { DIFFICULTY_CLUES, generatePuzzle } from '../src/sudoku-core.js';
+import { countSolutions } from '../src/sudoku-solver.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const { default: App } = await import('../src/components/App.jsx');
 
-function createDeterministicRandom() {
-    let seed = 123456789;
+const expectedDifficultyClues = {
+    easy: 45,
+    medium: 35,
+    hard: 30
+};
+
+function createDeterministicRandom(initialSeed = 123456789) {
+    let seed = initialSeed;
     return () => {
         seed = (seed * 1664525 + 1013904223) % 4294967296;
         return seed / 4294967296;
@@ -24,6 +32,36 @@ function createGame() {
     });
     return renderer;
 }
+
+test('generated puzzles have exactly one solution', () => {
+    for (const seed of [1, 42, 123456789, 987654321]) {
+        const { puzzle, solution } = generatePuzzle(35, createDeterministicRandom(seed));
+
+        assert.equal(countSolutions(puzzle, 2), 1, `seed ${seed} should produce a unique puzzle`);
+        assert.ok(puzzle.every((row, rowIndex) =>
+            row.every((value, colIndex) =>
+                value === 0 || value === solution[rowIndex][colIndex])));
+    }
+});
+
+test('difficulty selector supports Easy, Medium, and Hard', () => {
+    const renderer = createGame();
+    const options = getDifficultySelect(renderer)
+        .findAllByType('option')
+        .map(option => option.props.value);
+
+    assert.deepEqual(DIFFICULTY_CLUES, expectedDifficultyClues);
+    assert.deepEqual(options, Object.keys(expectedDifficultyClues));
+});
+
+test('each difficulty generates its expected clue count and one solution', () => {
+    for (const [difficulty, clues] of Object.entries(expectedDifficultyClues)) {
+        const { puzzle } = generatePuzzle(clues, createDeterministicRandom(42));
+
+        assert.equal(puzzle.flat().filter(Boolean).length, clues, `${difficulty} clue count`);
+        assert.equal(countSolutions(puzzle, 2), 1, `${difficulty} should have one solution`);
+    }
+});
 
 function getCells(renderer) {
     return renderer.root.findAllByType('input');
@@ -45,6 +83,10 @@ function clickButton(renderer, label) {
     const button = renderer.root.findAllByType('button')
         .find(element => element.children.join('') === label);
     act(() => button.props.onClick());
+}
+
+function getDifficultySelect(renderer) {
+    return renderer.root.findByProps({ id: 'difficulty' });
 }
 
 function assertCluesAreConsistent(cells) {
@@ -96,6 +138,18 @@ test('new game renders a valid 9-by-9 puzzle with 35 clues', () => {
     clickButton(renderer, 'New Game');
     assert.equal(getCells(renderer).length, 81);
     assert.equal(getMessage(renderer), '');
+});
+
+test('new game uses the selected difficulty', () => {
+    const renderer = createGame();
+    const select = getDifficultySelect(renderer);
+
+    assert.equal(select.props.value, 'medium');
+    act(() => select.props.onChange({ target: { value: 'hard' } }));
+    clickButton(renderer, 'New Game');
+
+    assert.equal(getDifficultySelect(renderer).props.value, 'hard');
+    assert.equal(getCells(renderer).filter(cell => cell.props.disabled).length, 30);
 });
 
 test('editable cells accept only digits 1 through 9 and mark empty cells incorrect', () => {

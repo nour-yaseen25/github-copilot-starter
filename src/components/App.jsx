@@ -2,13 +2,13 @@
 
 import React, { useState } from 'react';
 import { EMPTY } from '../sudoku-solver.js';
-import { deepCopy, generatePuzzle } from '../sudoku-core.js';
+import { deepCopy, DIFFICULTY_CLUES, generatePuzzle } from '../sudoku-core.js';
 import { matchesSolution } from '../sudoku-validator.js';
 import SudokuBoard from './SudokuBoard.jsx';
 import GameControls from './GameControls.jsx';
 
-const createGame = random => {
-    const generated = generatePuzzle(35, random);
+const createGame = (random, difficulty = 'medium') => {
+    const generated = generatePuzzle(DIFFICULTY_CLUES[difficulty], random);
     return {
         board: deepCopy(generated.puzzle),
         puzzle: deepCopy(generated.puzzle),
@@ -17,12 +17,13 @@ const createGame = random => {
 };
 
 const App = ({ random = Math.random }) => {
-    const [game, setGame] = useState(() => createGame(random));
+    const [difficulty, setDifficulty] = useState('medium');
+    const [game, setGame] = useState(() => createGame(random, difficulty));
     const [checked, setChecked] = useState(false);
     const [message, setMessage] = useState('');
 
     const newGame = () => {
-        setGame(createGame(random));
+        setGame(createGame(random, difficulty));
         setChecked(false);
         setMessage('');
     };
@@ -68,6 +69,8 @@ const App = ({ random = Math.random }) => {
             <GameControls
                 message={message}
                 messageColor={messageColor}
+                difficulty={difficulty}
+                onDifficultyChange={setDifficulty}
                 onNewGame={newGame}
                 onCheckSolution={checkSolution}
             />

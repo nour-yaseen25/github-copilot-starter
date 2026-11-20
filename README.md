@@ -41,6 +41,7 @@ npm test
 
 - Functional React components and hooks
 - A valid 9-by-9 puzzle with a unique solution
+- Easy (45 clues), Medium (35 clues), and Hard (30 clues) puzzle difficulty selection
 - New Game and Check Solution controls
 - Digit-only editable cells
 - Existing application styling in `styles.css`
