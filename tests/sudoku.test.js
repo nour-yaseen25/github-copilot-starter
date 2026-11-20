@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { afterEach, test } from 'node:test';
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { DIFFICULTY_CLUES, generatePuzzle } from '../src/sudoku-core.js';
@@ -8,6 +8,14 @@ import { countSolutions } from '../src/sudoku-solver.js';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const { default: App } = await import('../src/components/App.jsx');
+const renderers = [];
+
+afterEach(() => {
+    for (const renderer of renderers) {
+        act(() => renderer.unmount());
+    }
+    renderers.length = 0;
+});
 
 const expectedDifficultyClues = {
     easy: 45,
@@ -30,6 +38,7 @@ function createGame() {
             React.createElement(App, { random: createDeterministicRandom() })
         );
     });
+    renderers.push(renderer);
     return renderer;
 }
 
@@ -73,6 +82,10 @@ function getRows(renderer) {
 
 function getMessage(renderer) {
     return renderer.root.findByProps({ id: 'message' }).children.join('');
+}
+
+function getTimer(renderer) {
+    return renderer.root.findByProps({ id: 'timer' }).children.join('');
 }
 
 function getMessageStyle(renderer) {
@@ -150,6 +163,40 @@ test('new game uses the selected difficulty', () => {
 
     assert.equal(getDifficultySelect(renderer).props.value, 'hard');
     assert.equal(getCells(renderer).filter(cell => cell.props.disabled).length, 30);
+});
+
+test('timer starts, displays elapsed time, resets for a new game, and stops on completion', t => {
+    t.mock.timers.enable({ apis: ['setInterval'] });
+    const renderer = createGame();
+
+    assert.equal(getTimer(renderer), '00:00');
+    act(() => t.mock.timers.tick(61000));
+    assert.equal(getTimer(renderer), '01:01');
+
+    clickButton(renderer, 'New Game');
+    assert.equal(getTimer(renderer), '00:00');
+
+    act(() => t.mock.timers.tick(1000));
+    assert.equal(getTimer(renderer), '00:01');
+
+    const editableCells = getCells(renderer).filter(cell => !cell.props.disabled);
+    for (const originalCell of editableCells) {
+        const originalIndex = getCells(renderer).indexOf(originalCell);
+        for (let value = 1; value <= 9; value++) {
+            act(() => getCells(renderer)[originalIndex].props.onChange({
+                target: { value: String(value) }
+            }));
+            clickButton(renderer, 'Check Solution');
+            if (getCells(renderer)[originalIndex].props.className === 'sudoku-cell') {
+                break;
+            }
+        }
+    }
+
+    assert.equal(getMessage(renderer), 'Congratulations! You solved it!');
+    const completedTime = getTimer(renderer);
+    act(() => t.mock.timers.tick(3000));
+    assert.equal(getTimer(renderer), completedTime);
 });
 
 test('editable cells accept only digits 1 through 9 and mark empty cells incorrect', () => {

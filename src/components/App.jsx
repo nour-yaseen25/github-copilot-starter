@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { EMPTY } from '../sudoku-solver.js';
 import { deepCopy, DIFFICULTY_CLUES, generatePuzzle } from '../sudoku-core.js';
 import { matchesSolution } from '../sudoku-validator.js';
@@ -21,11 +21,27 @@ const App = ({ random = Math.random }) => {
     const [game, setGame] = useState(() => createGame(random, difficulty));
     const [checked, setChecked] = useState(false);
     const [message, setMessage] = useState('');
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [timerRunning, setTimerRunning] = useState(true);
+
+    useEffect(() => {
+        if (!timerRunning) {
+            return undefined;
+        }
+
+        const intervalId = setInterval(() => {
+            setElapsedSeconds(current => current + 1);
+        }, 1000);
+
+        return () => clearInterval(intervalId);
+    }, [timerRunning]);
 
     const newGame = () => {
         setGame(createGame(random, difficulty));
         setChecked(false);
         setMessage('');
+        setElapsedSeconds(0);
+        setTimerRunning(true);
     };
 
     const handleCellChange = (row, col, digits) => {
@@ -45,11 +61,15 @@ const App = ({ random = Math.random }) => {
         setChecked(true);
         if (matchesSolution(game.board, game.solution)) {
             setMessage('Congratulations! You solved it!');
+            setTimerRunning(false);
         } else {
             setMessage('Some cells are incorrect.');
         }
     };
 
+    const minutes = Math.floor(elapsedSeconds / 60);
+    const seconds = elapsedSeconds % 60;
+    const timer = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     const messageColor = message.startsWith('Congratulations')
         ? '#388e3c'
         : message
@@ -69,6 +89,7 @@ const App = ({ random = Math.random }) => {
             <GameControls
                 message={message}
                 messageColor={messageColor}
+                timer={timer}
                 difficulty={difficulty}
                 onDifficultyChange={setDifficulty}
                 onNewGame={newGame}

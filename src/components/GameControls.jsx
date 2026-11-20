@@ -3,12 +3,14 @@ import React from 'react';
 const GameControls = ({
     message,
     messageColor,
+    timer,
     difficulty,
     onDifficultyChange,
     onNewGame,
     onCheckSolution
 }) => (
     <div className="controls">
+        <span id="timer" aria-label="Elapsed time">{timer}</span>
         <label className="difficulty-selector" htmlFor="difficulty">
             Difficulty
             <select
