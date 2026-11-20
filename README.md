@@ -44,10 +44,13 @@ npm test
 - Easy (45 clues), Medium (35 clues), and Hard (30 clues) puzzle difficulty selection
 - New Game, Hint, and Check Puzzle controls
 - Digit-only editable cells
+- Note Mode for adding or removing valid candidate numbers
+- Number selection highlighting with remaining counts for each digit
+- Smart Hint explanations for Naked Singles and Hidden Singles
 - Live row, column, and box conflict highlighting
 - Locked, distinctly highlighted hints and hint usage tracking
 - Automatic completion detection with elapsed time and hint count
-- Existing application styling in `styles.css`
+- Responsive board and grouped game controls styled in `styles.css`
 
 ## Built With
 

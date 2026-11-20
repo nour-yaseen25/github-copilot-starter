@@ -4,6 +4,11 @@ import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { DIFFICULTY_CLUES, generatePuzzle } from '../src/sudoku-core.js';
 import { countSolutions, solveBoard } from '../src/sudoku-solver.js';
+import {
+    findSmartHint,
+    getCandidateNumbers,
+    getRemainingNumberCounts
+} from '../src/sudoku-strategies.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -337,7 +342,7 @@ test('hint fills and locks a correct editable cell, tracks usage, and resets for
     assert.match(hintedCell.props.className, /hinted/);
     assert.equal(hintedCell.props.disabled, true);
     assert.match(hintedCell.props.value, /^[1-9]$/);
-    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), 'Hints used: 1');
+    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), '1');
 
     const secondEditableIndex = getCells(renderer).findIndex(cell => !cell.props.disabled);
     const correctValue = solutionBoard[Math.floor(secondEditableIndex / 9)][secondEditableIndex % 9];
@@ -349,14 +354,14 @@ test('hint fills and locks a correct editable cell, tracks usage, and resets for
     hintedCell = getCells(renderer)[secondEditableIndex];
     assert.equal(hintedCell.props.value, String(correctValue));
     assert.equal(hintedCell.props.disabled, true);
-    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), 'Hints used: 2');
+    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), '2');
 
     clickButton(renderer, 'Check Puzzle');
     hintedCell = getCells(renderer)[editableIndex];
     assert.doesNotMatch(hintedCell.props.className, /incorrect/);
 
     clickButton(renderer, 'New Game');
-    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), 'Hints used: 0');
+    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), '0');
     assert.equal(getCells(renderer).filter(cell => cell.props.disabled).length, 35);
 });
 
@@ -381,4 +386,144 @@ test('correctly completing the board automatically displays completion time and 
         /^Congratulations! You solved it! Time: \d{2}:\d{2}\. Hints used: 1\.$/
     );
     assert.equal(getCells(renderer)[firstEditable].props.disabled, true);
+});
+
+test('candidate helpers find Naked Singles, Hidden Singles, and remaining counts', () => {
+    const solvedBoard = [
+        [5, 3, 4, 6, 7, 8, 9, 1, 2],
+        [6, 7, 2, 1, 9, 5, 3, 4, 8],
+        [1, 9, 8, 3, 4, 2, 5, 6, 7],
+        [8, 5, 9, 7, 6, 1, 4, 2, 3],
+        [4, 2, 6, 8, 5, 3, 7, 9, 1],
+        [7, 1, 3, 9, 2, 4, 8, 5, 6],
+        [9, 6, 1, 5, 3, 7, 2, 8, 4],
+        [2, 8, 7, 4, 1, 9, 6, 3, 5],
+        [3, 4, 5, 2, 8, 6, 1, 7, 9]
+    ];
+    const nakedBoard = solvedBoard.map(row => [...row]);
+    nakedBoard[0][0] = 0;
+
+    assert.deepEqual(getCandidateNumbers(nakedBoard, 0, 0), [5]);
+    const nakedHint = findSmartHint(nakedBoard);
+    assert.equal(nakedHint.row, 0);
+    assert.equal(nakedHint.col, 0);
+    assert.equal(nakedHint.number, 5);
+    assert.equal(nakedHint.strategy, 'Naked Single');
+    assert.equal(nakedHint.explanation, 'Only 5 fits in this cell, making it a Naked Single.');
+    assert.equal(nakedHint.relatedCells.length, 20);
+
+    const hiddenBoard = [
+        [5, 0, 0, 0, 0, 0, 0, 0, 2],
+        [0, 7, 2, 0, 0, 5, 0, 0, 8],
+        [1, 0, 8, 0, 0, 0, 0, 0, 0],
+        [0, 0, 9, 7, 6, 1, 0, 2, 3],
+        [0, 0, 6, 0, 0, 0, 0, 9, 0],
+        [7, 0, 0, 0, 0, 0, 0, 5, 0],
+        [0, 0, 0, 5, 0, 7, 0, 0, 0],
+        [0, 0, 0, 0, 1, 9, 0, 3, 0],
+        [3, 0, 0, 0, 8, 6, 0, 7, 0]
+    ];
+
+    const hiddenHint = findSmartHint(hiddenBoard);
+    assert.equal(hiddenHint.strategy, 'Hidden Single');
+    assert.match(hiddenHint.explanation, /Hidden Single/);
+    assert.ok(hiddenHint.relatedCells.length > 0);
+    assert.deepEqual(getRemainingNumberCounts(solvedBoard), Array(9).fill(0));
+    assert.deepEqual(getRemainingNumberCounts(nakedBoard), [0, 0, 0, 0, 1, 0, 0, 0, 0]);
+});
+
+test('note mode toggles valid candidates without changing the board and number selection highlights matches', () => {
+    const renderer = createGame();
+    const cells = getCells(renderer);
+    const targetIndex = cells.findIndex(cell => !cell.props.disabled);
+    const row = Number(cells[targetIndex].props['data-row']);
+    const col = Number(cells[targetIndex].props['data-col']);
+    const candidates = getCandidateNumbers(
+        Array.from({ length: 9 }, (_, rowIndex) =>
+            cells.slice(rowIndex * 9, rowIndex * 9 + 9)
+                .map(cell => Number(cell.props.value) || 0)),
+        row,
+        col
+    );
+    const candidate = candidates[0];
+    const initialValue = cells[targetIndex].props.value;
+    const remainingCounts = getRemainingNumberCounts(Array.from({ length: 9 }, (_, rowIndex) =>
+        cells.slice(rowIndex * 9, rowIndex * 9 + 9)
+            .map(cell => Number(cell.props.value) || 0)));
+    assert.deepEqual(
+        renderer.root.findAllByType('button')
+            .filter(button => button.props['aria-label']?.startsWith('Number '))
+            .map(button => button.props['aria-label']),
+        remainingCounts.map((count, index) => `Number ${index + 1}, ${count} remaining`)
+    );
+
+    clickButton(renderer, 'Note Mode: Off');
+    act(() => getBoard(renderer).props.onClick({
+        target: { dataset: { row: String(row), col: String(col) } }
+    }));
+    const numberButton = number => renderer.root.findAllByType('button')
+        .find(button => button.props['aria-label']?.startsWith(`Number ${number},`));
+    act(() => numberButton(candidate).props.onClick());
+    act(() => numberButton(candidates[1]).props.onClick());
+
+    let notes = renderer.root.findByProps({ className: 'cell-notes' });
+    assert.equal(notes.props['aria-label'], `Notes: ${candidate}, ${candidates[1]}`);
+    const displayedNotes = notes.findAllByType('span')
+        .map(note => note.children.join(''));
+    assert.equal(displayedNotes.length, 9);
+    assert.equal(displayedNotes[candidate - 1], String(candidate));
+    assert.equal(displayedNotes[candidates[1] - 1], String(candidates[1]));
+    assert.equal(notes.findAllByProps({ className: 'candidate-highlighted' }).length, 1);
+    assert.equal(getCells(renderer)[targetIndex].props.value, initialValue);
+
+    act(() => numberButton(candidate).props.onClick());
+    notes = renderer.root.findByProps({ className: 'cell-notes' });
+    assert.equal(notes.props['aria-label'], `Notes: ${candidates[1]}`);
+    act(() => numberButton(candidates[1]).props.onClick());
+    assert.equal(renderer.root.findAllByProps({ className: 'cell-notes' }).length, 0);
+
+    enterCell(renderer, targetIndex, String(candidate));
+    notes = renderer.root.findByProps({ className: 'cell-notes' });
+    assert.equal(notes.props['aria-label'], `Notes: ${candidate}`);
+    assert.equal(getCells(renderer)[targetIndex].props.value, initialValue);
+    enterCell(renderer, targetIndex, String(candidate));
+    assert.equal(renderer.root.findAllByProps({ className: 'cell-notes' }).length, 0);
+
+    const filledCell = getCells(renderer).find(cell => cell.props.value !== '');
+    const selectedNumber = Number(filledCell.props.value);
+    const highlightButton = renderer.root.findAllByType('button')
+        .find(button => button.props['aria-label']?.startsWith(`Number ${selectedNumber},`));
+    act(() => highlightButton.props.onClick());
+    assert.equal(highlightButton.props['aria-pressed'], true);
+    assert.ok(getCells(renderer)
+        .filter(cell => cell.props.value === String(selectedNumber))
+        .every(cell => cell.props.className.includes('number-highlighted')));
+    assert.ok(getCells(renderer)
+        .filter(cell => cell.props.value === String(selectedNumber))
+        .length > 1);
+});
+
+test('Smart Hint applies a logical single and explains its strategy', () => {
+    const renderer = createGame();
+
+    clickButton(renderer, 'Smart Hint');
+
+    assert.match(
+        renderer.root.findByProps({ id: 'hint-explanation' }).children.join(''),
+        /(Naked|Hidden) Single/
+    );
+    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), '1');
+    assert.equal(getCells(renderer).filter(cell => cell.props.className.includes('hinted')).length, 1);
+    assert.equal(getCells(renderer).filter(cell => cell.props.className.includes('hint-target')).length, 1);
+    assert.ok(getCells(renderer).some(cell => cell.props.className.includes('hint-related')));
+});
+
+test('controls are grouped into game, number, pencil mark, and hint sections', () => {
+    const renderer = createGame();
+    const sectionTitles = renderer.root.findAllByType('h2')
+        .map(title => title.children.join(''));
+
+    assert.deepEqual(sectionTitles, ['Your puzzle', 'Game', 'Number guide', 'Pencil marks', 'Need a nudge?']);
+    assert.ok(renderer.root.findAllByType('button')
+        .every(button => !/Solver/.test(button.children.join(''))));
 });
