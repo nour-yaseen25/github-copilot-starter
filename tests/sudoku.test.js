@@ -1,10 +1,7 @@
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { runInNewContext } = require('node:vm');
-const { test } = require('node:test');
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
 
-const gameScript = fs.readFileSync(path.join(__dirname, '..', 'sudoku.js'), 'utf8');
+const { createSudokuApp } = await import('../src/sudoku-ui.js');
 
 class Element {
     constructor(tagName) {
@@ -60,7 +57,7 @@ function createGame() {
     };
     const window = {};
 
-    runInNewContext(gameScript, { document, window, Math: deterministicMath });
+    createSudokuApp({ document, window, random: deterministicMath.random });
 
     return { board: elements['sudoku-board'], message: elements.message, window };
 }
