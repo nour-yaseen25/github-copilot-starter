@@ -3,7 +3,7 @@ import { afterEach, test } from 'node:test';
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { DIFFICULTY_CLUES, generatePuzzle } from '../src/sudoku-core.js';
-import { countSolutions } from '../src/sudoku-solver.js';
+import { countSolutions, solveBoard } from '../src/sudoku-solver.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -80,6 +80,23 @@ function getRows(renderer) {
     return renderer.root.findAllByProps({ className: 'sudoku-row' });
 }
 
+function getBoard(renderer) {
+    return renderer.root.findByProps({ id: 'sudoku-board' });
+}
+
+function enterCell(renderer, index, value) {
+    const cell = getCells(renderer)[index];
+    act(() => getBoard(renderer).props.onChange({
+        target: {
+            dataset: {
+                row: cell.props['data-row'],
+                col: cell.props['data-col']
+            },
+            value: String(value)
+        }
+    }));
+}
+
 function getMessage(renderer) {
     return renderer.root.findByProps({ id: 'message' }).children.join('');
 }
@@ -144,7 +161,7 @@ test('new game renders a valid 9-by-9 puzzle with 35 clues', () => {
     assert.equal(getMessage(renderer), '');
     assertCluesAreConsistent(cells);
 
-    clickButton(renderer, 'Check Solution');
+    clickButton(renderer, 'Check Puzzle');
     assert.equal(getMessage(renderer), 'Some cells are incorrect.');
     assert.equal(getMessageStyle(renderer), '#d32f2f');
 
@@ -183,17 +200,15 @@ test('timer starts, displays elapsed time, resets for a new game, and stops on c
     for (const originalCell of editableCells) {
         const originalIndex = getCells(renderer).indexOf(originalCell);
         for (let value = 1; value <= 9; value++) {
-            act(() => getCells(renderer)[originalIndex].props.onChange({
-                target: { value: String(value) }
-            }));
-            clickButton(renderer, 'Check Solution');
+            enterCell(renderer, originalIndex, value);
+            clickButton(renderer, 'Check Puzzle');
             if (getCells(renderer)[originalIndex].props.className === 'sudoku-cell') {
                 break;
             }
         }
     }
 
-    assert.equal(getMessage(renderer), 'Congratulations! You solved it!');
+    assert.match(getMessage(renderer), /^Congratulations! You solved it! Time: 00:01\. Hints used: 0\.$/);
     const completedTime = getTimer(renderer);
     act(() => t.mock.timers.tick(3000));
     assert.equal(getTimer(renderer), completedTime);
@@ -203,15 +218,15 @@ test('editable cells accept only digits 1 through 9 and mark empty cells incorre
     const renderer = createGame();
     let editableCell = getCells(renderer).find(cell => !cell.props.disabled);
 
-    act(() => editableCell.props.onChange({ target: { value: 'a0x7' } }));
+    enterCell(renderer, getCells(renderer).indexOf(editableCell), 'a0x7');
     editableCell = getCells(renderer).find(cell => !cell.props.disabled);
     assert.equal(editableCell.props.value, '7');
 
-    act(() => editableCell.props.onChange({ target: { value: '0' } }));
+    enterCell(renderer, getCells(renderer).indexOf(editableCell), '0');
     editableCell = getCells(renderer).find(cell => !cell.props.disabled);
     assert.equal(editableCell.props.value, '');
 
-    clickButton(renderer, 'Check Solution');
+    clickButton(renderer, 'Check Puzzle');
     editableCell = getCells(renderer).find(cell => !cell.props.disabled);
     assert.equal(editableCell.props.className, 'sudoku-cell incorrect');
 });
@@ -225,10 +240,8 @@ test('check solution congratulates the player when all cells match the solution'
         let foundCorrectValue = false;
 
         for (let value = 1; value <= 9; value++) {
-            act(() => getCells(renderer)[originalIndex].props.onChange({
-                target: { value: String(value) }
-            }));
-            clickButton(renderer, 'Check Solution');
+            enterCell(renderer, originalIndex, value);
+            clickButton(renderer, 'Check Puzzle');
 
             const updatedCell = getCells(renderer)[originalIndex];
             if (updatedCell.props.className === 'sudoku-cell') {
@@ -240,7 +253,132 @@ test('check solution congratulates the player when all cells match the solution'
         assert.ok(foundCorrectValue, 'each editable cell should have a matching solution value');
     }
 
-    clickButton(renderer, 'Check Solution');
-    assert.equal(getMessage(renderer), 'Congratulations! You solved it!');
+    clickButton(renderer, 'Check Puzzle');
+    assert.match(getMessage(renderer), /^Congratulations! You solved it! Time: \d{2}:\d{2}\. Hints used: 0\.$/);
     assert.equal(getMessageStyle(renderer), '#388e3c');
+});
+
+test('board-level input delegation sanitizes edits and highlights row, column, and box conflicts live', () => {
+    for (const conflictType of ['row', 'column', 'box']) {
+        const renderer = createGame();
+        const cells = getCells(renderer);
+        const targetIndex = cells.findIndex((cell, index) => {
+            if (cell.props.disabled) return false;
+            const row = Math.floor(index / 9);
+            const col = index % 9;
+            return cells.some((peer, peerIndex) => {
+                if (!peer.props.disabled || !peer.props.value) return false;
+                const peerRow = Math.floor(peerIndex / 9);
+                const peerCol = peerIndex % 9;
+                if (conflictType === 'row') return peerRow === row;
+                if (conflictType === 'column') return peerCol === col;
+                return Math.floor(peerRow / 3) === Math.floor(row / 3) &&
+                    Math.floor(peerCol / 3) === Math.floor(col / 3);
+            });
+        });
+        const row = Math.floor(targetIndex / 9);
+        const col = targetIndex % 9;
+        const peer = cells.find((cell, peerIndex) => {
+            if (!cell.props.disabled || !cell.props.value) return false;
+            const peerRow = Math.floor(peerIndex / 9);
+            const peerCol = peerIndex % 9;
+            if (conflictType === 'row') return peerRow === row;
+            if (conflictType === 'column') return peerCol === col;
+            return Math.floor(peerRow / 3) === Math.floor(row / 3) &&
+                Math.floor(peerCol / 3) === Math.floor(col / 3);
+        });
+
+        assert.equal(typeof cells[targetIndex].props.onChange, 'function');
+        assert.equal(typeof getBoard(renderer).props.onChange, 'function');
+        enterCell(renderer, targetIndex, peer.props.value);
+        assert.match(getCells(renderer)[targetIndex].props.className, /incorrect/);
+
+        enterCell(renderer, targetIndex, '');
+        assert.doesNotMatch(getCells(renderer)[targetIndex].props.className, /incorrect/);
+    }
+});
+
+test('editable input changes are handled by the board while prefilled and hinted cells stay locked', () => {
+    const renderer = createGame();
+    const cells = getCells(renderer);
+    const editableIndex = cells.findIndex(cell => !cell.props.disabled);
+    const prefilledIndex = cells.findIndex(cell => cell.props.disabled);
+
+    assert.equal(typeof cells[editableIndex].props.onChange, 'function');
+    assert.equal(typeof getBoard(renderer).props.onChange, 'function');
+    enterCell(renderer, editableIndex, '7');
+    assert.equal(getCells(renderer)[editableIndex].props.value, '7');
+
+    clickButton(renderer, 'Hint');
+    const hintedIndex = getCells(renderer).findIndex(cell =>
+        cell.props.className.includes('hinted'));
+    assert.notEqual(hintedIndex, -1);
+    assert.equal(getCells(renderer)[hintedIndex].props.disabled, true);
+
+    const lockedValues = [prefilledIndex, hintedIndex].map(index => getCells(renderer)[index].props.value);
+    enterCell(renderer, prefilledIndex, '1');
+    enterCell(renderer, hintedIndex, '1');
+    assert.equal(getCells(renderer)[prefilledIndex].props.value, lockedValues[0]);
+    assert.equal(getCells(renderer)[hintedIndex].props.value, lockedValues[1]);
+});
+
+test('hint fills and locks a correct editable cell, tracks usage, and resets for a new game', () => {
+    const renderer = createGame();
+    const editableIndex = getCells(renderer).findIndex(cell => !cell.props.disabled);
+
+    const solution = getCells(renderer).map(cell => Number(cell.props.value) || 0);
+    const solutionBoard = Array.from({ length: 9 }, (_, row) =>
+        solution.slice(row * 9, row * 9 + 9));
+    assert.equal(solveBoard(solutionBoard), true);
+
+    clickButton(renderer, 'Hint');
+
+    let hintedCell = getCells(renderer)[editableIndex];
+    assert.match(hintedCell.props.className, /hinted/);
+    assert.equal(hintedCell.props.disabled, true);
+    assert.match(hintedCell.props.value, /^[1-9]$/);
+    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), 'Hints used: 1');
+
+    const secondEditableIndex = getCells(renderer).findIndex(cell => !cell.props.disabled);
+    const correctValue = solutionBoard[Math.floor(secondEditableIndex / 9)][secondEditableIndex % 9];
+    const wrongValue = Array.from({ length: 9 }, (_, index) => String(index + 1))
+        .find(value => Number(value) !== correctValue);
+    enterCell(renderer, secondEditableIndex, wrongValue);
+    clickButton(renderer, 'Hint');
+
+    hintedCell = getCells(renderer)[secondEditableIndex];
+    assert.equal(hintedCell.props.value, String(correctValue));
+    assert.equal(hintedCell.props.disabled, true);
+    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), 'Hints used: 2');
+
+    clickButton(renderer, 'Check Puzzle');
+    hintedCell = getCells(renderer)[editableIndex];
+    assert.doesNotMatch(hintedCell.props.className, /incorrect/);
+
+    clickButton(renderer, 'New Game');
+    assert.equal(renderer.root.findByProps({ id: 'hints-used' }).children.join(''), 'Hints used: 0');
+    assert.equal(getCells(renderer).filter(cell => cell.props.disabled).length, 35);
+});
+
+test('correctly completing the board automatically displays completion time and hints used', () => {
+    const renderer = createGame();
+    const solution = getCells(renderer).map(cell => Number(cell.props.value) || 0);
+    const solutionBoard = Array.from({ length: 9 }, (_, row) =>
+        solution.slice(row * 9, row * 9 + 9));
+    assert.equal(solveBoard(solutionBoard), true);
+
+    const firstEditable = getCells(renderer).findIndex(cell => !cell.props.disabled);
+    clickButton(renderer, 'Hint');
+    assert.match(getMessage(renderer), /^$/);
+
+    for (const [index, cell] of getCells(renderer).entries()) {
+        if (cell.props.disabled) continue;
+        enterCell(renderer, index, solutionBoard[Math.floor(index / 9)][index % 9]);
+    }
+
+    assert.match(
+        getMessage(renderer),
+        /^Congratulations! You solved it! Time: \d{2}:\d{2}\. Hints used: 1\.$/
+    );
+    assert.equal(getCells(renderer)[firstEditable].props.disabled, true);
 });

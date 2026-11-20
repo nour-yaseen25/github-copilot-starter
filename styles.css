@@ -44,6 +44,12 @@ h1 {
     color: #333;
 }
 
+.sudoku-cell.hinted {
+    background: #d1c4e9;
+    color: #4527a0;
+    font-weight: bold;
+}
+
 .sudoku-cell.incorrect {
     background: #ffcdd2;
 }
@@ -95,4 +101,8 @@ button:hover {
     margin-left: 20px;
     font-size: 16px;
     color: #d32f2f;
+}
+
+#hints-used {
+    margin: 0 8px;
 }

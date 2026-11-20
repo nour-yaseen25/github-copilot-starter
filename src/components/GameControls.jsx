@@ -4,13 +4,16 @@ const GameControls = ({
     message,
     messageColor,
     timer,
+    hintsUsed,
     difficulty,
     onDifficultyChange,
     onNewGame,
-    onCheckSolution
+    onHint,
+    onCheckPuzzle
 }) => (
     <div className="controls">
         <span id="timer" aria-label="Elapsed time">{timer}</span>
+        <span id="hints-used">Hints used: {hintsUsed}</span>
         <label className="difficulty-selector" htmlFor="difficulty">
             Difficulty
             <select
@@ -24,7 +27,8 @@ const GameControls = ({
             </select>
         </label>
         <button type="button" onClick={onNewGame}>New Game</button>
-        <button type="button" onClick={onCheckSolution}>Check Solution</button>
+        <button type="button" onClick={onHint}>Hint</button>
+        <button type="button" onClick={onCheckPuzzle}>Check Puzzle</button>
         <span id="message" style={{ color: messageColor }}>{message}</span>
     </div>
 );

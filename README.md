@@ -1,8 +1,8 @@
 # Sudoku Game with React
 
-This project is a simple Sudoku game built with React and Next.js. It preserves the
-existing puzzle generation, solution checking, and styling without introducing
-additional gameplay features.
+This project is a simple Sudoku game built with React and Next.js. It includes
+unique puzzle generation, live entry validation, hints, and puzzle completion
+tracking.
 
 ## Getting Started
 
@@ -42,8 +42,11 @@ npm test
 - Functional React components and hooks
 - A valid 9-by-9 puzzle with a unique solution
 - Easy (45 clues), Medium (35 clues), and Hard (30 clues) puzzle difficulty selection
-- New Game and Check Solution controls
+- New Game, Hint, and Check Puzzle controls
 - Digit-only editable cells
+- Live row, column, and box conflict highlighting
+- Locked, distinctly highlighted hints and hint usage tracking
+- Automatic completion detection with elapsed time and hint count
 - Existing application styling in `styles.css`
 
 ## Built With
