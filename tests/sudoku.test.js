@@ -9,6 +9,12 @@ import {
     getCandidateNumbers,
     getRemainingNumberCounts
 } from '../src/sudoku-strategies.js';
+import {
+    getScores,
+    qualifiesForScoreboard,
+    saveScore,
+    SCOREBOARD_STORAGE_KEY
+} from '../src/scoreboard.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -36,15 +42,29 @@ function createDeterministicRandom(initialSeed = 123456789) {
     };
 }
 
-function createGame() {
+function createGame({ scoreboardStorage } = {}) {
     let renderer;
     act(() => {
         renderer = TestRenderer.create(
-            React.createElement(App, { random: createDeterministicRandom() })
+            React.createElement(App, {
+                random: createDeterministicRandom(),
+                scoreboardStorage
+            })
         );
     });
     renderers.push(renderer);
     return renderer;
+}
+
+function createMemoryStorage(initialValue = null) {
+    const values = new Map();
+    if (initialValue !== null) {
+        values.set(SCOREBOARD_STORAGE_KEY, JSON.stringify(initialValue));
+    }
+    return {
+        getItem: key => values.has(key) ? values.get(key) : null,
+        setItem: (key, value) => values.set(key, value)
+    };
 }
 
 test('generated puzzles have exactly one solution', () => {
@@ -56,6 +76,39 @@ test('generated puzzles have exactly one solution', () => {
             row.every((value, colIndex) =>
                 value === 0 || value === solution[rowIndex][colIndex])));
     }
+});
+
+test('score qualification admits open slots and only beats the slowest full-board time', () => {
+    const score = timeSeconds => ({ timeSeconds });
+    const fullScoreboard = Array.from({ length: 10 }, (_, index) =>
+        score(100 + index));
+
+    assert.equal(qualifiesForScoreboard(score(500), []), true);
+    assert.equal(qualifiesForScoreboard(score(99), fullScoreboard), true);
+    assert.equal(qualifiesForScoreboard(score(109), fullScoreboard), false);
+    assert.equal(qualifiesForScoreboard(score(110), fullScoreboard), false);
+});
+
+test('scores are ranked by completion time and persistence retains only the fastest ten', () => {
+    const storage = createMemoryStorage();
+    const entries = Array.from({ length: 12 }, (_, index) => ({
+        name: `Player ${index}`,
+        timeSeconds: 120 - index * 5,
+        hintsUsed: index % 3,
+        difficulty: ['easy', 'medium', 'hard'][index % 3]
+    }));
+
+    for (const entry of entries) {
+        saveScore(entry, storage);
+    }
+
+    const scores = getScores(storage);
+    assert.equal(scores.length, 10);
+    assert.deepEqual(scores.map(score => score.timeSeconds), [
+        65, 70, 75, 80, 85, 90, 95, 100, 105, 110
+    ]);
+    assert.deepEqual(scores[0], entries[11]);
+    assert.equal(JSON.parse(storage.getItem(SCOREBOARD_STORAGE_KEY)).length, 10);
 });
 
 test('difficulty selector supports Easy, Medium, and Hard', () => {
@@ -388,6 +441,39 @@ test('correctly completing the board automatically displays completion time and 
     assert.equal(getCells(renderer)[firstEditable].props.disabled, true);
 });
 
+test('a qualifying completion asks for a name and persists the score', () => {
+    const storage = createMemoryStorage(Array.from({ length: 10 }, (_, index) => ({
+        name: `Existing ${index}`,
+        timeSeconds: 200 + index,
+        hintsUsed: 0,
+        difficulty: 'easy'
+    })));
+    const renderer = createGame({ scoreboardStorage: storage });
+    const solutionBoard = Array.from({ length: 9 }, (_, row) =>
+        getCells(renderer).slice(row * 9, row * 9 + 9)
+            .map(cell => Number(cell.props.value) || 0));
+    assert.equal(solveBoard(solutionBoard), true);
+
+    for (const [index, cell] of getCells(renderer).entries()) {
+        if (!cell.props.disabled) {
+            enterCell(renderer, index, solutionBoard[Math.floor(index / 9)][index % 9]);
+        }
+    }
+
+    assert.match(getMessage(renderer), /^Congratulations/);
+    const nameInput = renderer.root.findByProps({ id: 'score-player-name' });
+    assert.equal(nameInput.props.required, true);
+    act(() => nameInput.props.onChange({ target: { value: '  Sudoku Star  ' } }));
+    const scoreForm = renderer.root.findByProps({ className: 'score-name-card' });
+    act(() => scoreForm.props.onSubmit({ preventDefault() {} }));
+
+    assert.equal(renderer.root.findAllByProps({ id: 'score-player-name' }).length, 0);
+    assert.equal(getScores(storage)[0].name, 'Sudoku Star');
+    assert.equal(getScores(storage)[0].difficulty, 'medium');
+    assert.equal(getScores(storage)[0].hintsUsed, 0);
+    assert.ok(renderer.root.findByType('table'));
+});
+
 test('candidate helpers find Naked Singles, Hidden Singles, and remaining counts', () => {
     const solvedBoard = [
         [5, 3, 4, 6, 7, 8, 9, 1, 2],
@@ -523,7 +609,14 @@ test('controls are grouped into game, number, pencil mark, and hint sections', (
     const sectionTitles = renderer.root.findAllByType('h2')
         .map(title => title.children.join(''));
 
-    assert.deepEqual(sectionTitles, ['Your puzzle', 'Game', 'Number guide', 'Pencil marks', 'Need a nudge?']);
+    assert.deepEqual(sectionTitles, [
+        'Your puzzle',
+        'Game',
+        'Number guide',
+        'Pencil marks',
+        'Need a nudge?',
+        'Top 10 Scores'
+    ]);
     assert.ok(renderer.root.findAllByType('button')
         .every(button => !/Solver/.test(button.children.join(''))));
 });

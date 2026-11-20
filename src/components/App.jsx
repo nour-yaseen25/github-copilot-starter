@@ -5,8 +5,10 @@ import { EMPTY } from '../sudoku-solver.js';
 import { deepCopy, DIFFICULTY_CLUES, generatePuzzle } from '../sudoku-core.js';
 import { matchesSolution } from '../sudoku-validator.js';
 import { findSmartHint, getCandidateNumbers } from '../sudoku-strategies.js';
+import { getScores, qualifiesForScoreboard, saveScore } from '../scoreboard.js';
 import SudokuBoard from './SudokuBoard.jsx';
 import GameControls from './GameControls.jsx';
+import Scoreboard from './Scoreboard.jsx';
 
 const createGame = (random, difficulty = 'medium') => {
     const generated = generatePuzzle(DIFFICULTY_CLUES[difficulty], random);
@@ -23,7 +25,7 @@ const formatTime = elapsedSeconds => {
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-const App = ({ random = Math.random }) => {
+const App = ({ random = Math.random, scoreboardStorage }) => {
     const [difficulty, setDifficulty] = useState('medium');
     const [game, setGame] = useState(() => createGame(random, difficulty));
     const [checked, setChecked] = useState(false);
@@ -41,6 +43,15 @@ const App = ({ random = Math.random }) => {
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [timerRunning, setTimerRunning] = useState(true);
     const [completed, setCompleted] = useState(false);
+    const [scores, setScores] = useState([]);
+    const [scoreboardError, setScoreboardError] = useState('');
+    const [pendingScore, setPendingScore] = useState(null);
+    const [playerName, setPlayerName] = useState('');
+
+    const getScoreboardStorage = () => {
+        if (scoreboardStorage) return scoreboardStorage;
+        return typeof window === 'undefined' ? null : window.localStorage;
+    };
 
     useEffect(() => {
         if (!timerRunning) {
@@ -53,6 +64,15 @@ const App = ({ random = Math.random }) => {
 
         return () => clearInterval(intervalId);
     }, [timerRunning]);
+
+    useEffect(() => {
+        try {
+            const storage = getScoreboardStorage();
+            if (storage) setScores(getScores(storage));
+        } catch (error) {
+            setScoreboardError(`Scoreboard could not be loaded: ${error.message}`);
+        }
+    }, [scoreboardStorage]);
 
     const newGame = () => {
         setGame(createGame(random, difficulty));
@@ -71,15 +91,48 @@ const App = ({ random = Math.random }) => {
         setElapsedSeconds(0);
         setTimerRunning(true);
         setCompleted(false);
+        setPendingScore(null);
+        setPlayerName('');
     };
 
     const completeGame = hintCount => {
+        if (completed) return;
         setCompleted(true);
         setTimerRunning(false);
+        const score = {
+            timeSeconds: elapsedSeconds,
+            hintsUsed: hintCount,
+            difficulty
+        };
+        if (qualifiesForScoreboard(score, scores)) {
+            setPendingScore(score);
+            setPlayerName('');
+        }
         setMessage(
             `Congratulations! You solved it! Time: ${formatTime(elapsedSeconds)}. ` +
             `Hints used: ${hintCount}.`
         );
+    };
+
+    const submitScore = event => {
+        event.preventDefault();
+        const name = playerName.trim();
+        if (!pendingScore || !name) return;
+
+        try {
+            const storage = getScoreboardStorage();
+            if (!storage) throw new Error('Browser storage is unavailable.');
+            const result = saveScore({ ...pendingScore, name }, storage);
+            setScores(result.scores);
+            setPendingScore(null);
+            if (!result.qualified) {
+                setScoreboardError('That score no longer qualifies for the Top 10.');
+            } else {
+                setScoreboardError('');
+            }
+        } catch (error) {
+            setScoreboardError(`Score could not be saved: ${error.message}`);
+        }
     };
 
     const toggleNote = (row, col, number) => {
@@ -249,6 +302,7 @@ const App = ({ random = Math.random }) => {
     };
 
     const checkPuzzle = () => {
+        if (completed) return;
         setChecked(true);
         setHintExplanation('');
         setHintStrategy('');
@@ -326,6 +380,30 @@ const App = ({ random = Math.random }) => {
                     onNumberSelect={handleNumberSelect}
                 />
             </div>
+            {pendingScore && (
+                <form className="score-name-card" onSubmit={submitScore} aria-labelledby="score-name-title">
+                    <div className="section-heading">
+                        <div>
+                            <h2 id="score-name-title">You made the Top 10!</h2>
+                            <p>Enter your name to save this score.</p>
+                        </div>
+                    </div>
+                    <label className="score-name-label" htmlFor="score-player-name">Player name</label>
+                    <div className="score-name-row">
+                        <input
+                            id="score-player-name"
+                            type="text"
+                            value={playerName}
+                            onChange={event => setPlayerName(event.target.value)}
+                            maxLength={24}
+                            required
+                            autoFocus
+                        />
+                        <button className="button-primary" type="submit">Save Score</button>
+                    </div>
+                </form>
+            )}
+            <Scoreboard scores={scores} error={scoreboardError} />
         </main>
     );
 };
