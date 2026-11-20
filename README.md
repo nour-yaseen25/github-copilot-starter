@@ -1,6 +1,6 @@
 # Sudoku Game with React
 
-This project is a simple Sudoku game built with React and Vite. It preserves the
+This project is a simple Sudoku game built with React and Next.js. It preserves the
 existing puzzle generation, solution checking, and styling without introducing
 additional gameplay features.
 
@@ -11,8 +11,8 @@ Follow these instructions to get a copy of the project up and running on your lo
 ### Dependencies
 
 - Modern web browser (Chrome, Firefox, Edge, etc.)
-- Node.js 18 or newer to run tests
-- React and Vite for the application and development server
+- Node.js 20.9 or newer
+- React and Next.js for the application and development server
 
 ### Installation
 
@@ -26,6 +26,8 @@ cd <<name of your forked repo>>
 npm install
 npm run dev
 ```
+
+Open [http://localhost:3000](http://localhost:3000) to play.
 
 ### Tests
 
@@ -49,7 +51,7 @@ npm test
 - [CSS3](https://developer.mozilla.org/en-US/docs/Web/CSS) - Styling for the game board and controls
 - [JavaScript](https://developer.mozilla.org/en-US/docs/Web/JavaScript) - Game logic and board generation
 - [React](https://react.dev/) - Component-based UI and state management
-- [Vite](https://vite.dev/) - Development server and production build
+- [Next.js](https://nextjs.org/) - App Router, development server, and production build
 
 ## License
 

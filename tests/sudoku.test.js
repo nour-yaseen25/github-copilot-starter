@@ -5,7 +5,7 @@ import TestRenderer, { act } from 'react-test-renderer';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-const { default: App } = await import('../src/components/App.js');
+const { default: App } = await import('../src/components/App.jsx');
 
 function createDeterministicRandom() {
     let seed = 123456789;

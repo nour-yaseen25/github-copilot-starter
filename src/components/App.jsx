@@ -1,9 +1,11 @@
+'use client';
+
 import React, { useState } from 'react';
 import { EMPTY } from '../sudoku-solver.js';
 import { deepCopy, generatePuzzle } from '../sudoku-core.js';
 import { matchesSolution } from '../sudoku-validator.js';
-import SudokuBoard from './SudokuBoard.js';
-import GameControls from './GameControls.js';
+import SudokuBoard from './SudokuBoard.jsx';
+import GameControls from './GameControls.jsx';
 
 const createGame = random => {
     const generated = generatePuzzle(35, random);
@@ -53,23 +55,23 @@ const App = ({ random = Math.random }) => {
             ? '#d32f2f'
             : undefined;
 
-    return React.createElement(
-        React.Fragment,
-        null,
-        React.createElement('h1', null, 'Sudoku Game'),
-        React.createElement(SudokuBoard, {
-            board: game.board,
-            solution: game.solution,
-            puzzle: game.puzzle,
-            checked,
-            onChange: handleCellChange
-        }),
-        React.createElement(GameControls, {
-            message,
-            messageColor,
-            onNewGame: newGame,
-            onCheckSolution: checkSolution
-        })
+    return (
+        <>
+            <h1>Sudoku Game</h1>
+            <SudokuBoard
+                board={game.board}
+                solution={game.solution}
+                puzzle={game.puzzle}
+                checked={checked}
+                onChange={handleCellChange}
+            />
+            <GameControls
+                message={message}
+                messageColor={messageColor}
+                onNewGame={newGame}
+                onCheckSolution={checkSolution}
+            />
+        </>
     );
 };
 

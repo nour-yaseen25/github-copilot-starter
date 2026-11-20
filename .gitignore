@@ -12,3 +12,4 @@ Thumbs.db
 *.code-workspace
 node_modules/
 dist/
+.next/
