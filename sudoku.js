@@ -1,7 +1,15 @@
-import { createSudokuApp } from './src/sudoku-ui.js';
+import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './src/components/App.js';
 
-if (typeof document !== 'undefined') {
-    createSudokuApp({ document, window });
+const rootElement = document.getElementById('root');
+
+if (rootElement) {
+    createRoot(rootElement).render(
+        React.createElement(
+            React.StrictMode,
+            null,
+            React.createElement(App)
+        )
+    );
 }
-
-export { createSudokuApp };

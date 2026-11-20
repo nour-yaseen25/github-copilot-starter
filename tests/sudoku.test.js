@@ -1,72 +1,58 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import React from 'react';
+import TestRenderer, { act } from 'react-test-renderer';
 
-const { createSudokuApp } = await import('../src/sudoku-ui.js');
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-class Element {
-    constructor(tagName) {
-        this.tagName = tagName;
-        this.children = [];
-        this.style = {};
-        this.value = '';
-        this.disabled = false;
-        this.className = '';
-    }
+const { default: App } = await import('../src/components/App.js');
 
-    set innerHTML(value) {
-        this._innerHTML = value;
-        this.children = [];
-    }
-
-    get innerHTML() {
-        return this._innerHTML || '';
-    }
-
-    appendChild(child) {
-        this.children.push(child);
-    }
-
-    getElementsByTagName(tagName) {
-        const matchingElements = [];
-        for (const child of this.children) {
-            if (child.tagName === tagName) matchingElements.push(child);
-            matchingElements.push(...child.getElementsByTagName(tagName));
-        }
-        return matchingElements;
-    }
-}
-
-function createGame() {
-    const elements = {
-        'sudoku-board': new Element('div'),
-        message: new Element('span')
-    };
-    const document = {
-        getElementById(id) {
-            return elements[id];
-        },
-        createElement(tagName) {
-            return new Element(tagName);
-        }
-    };
+function createDeterministicRandom() {
     let seed = 123456789;
-    const deterministicMath = Object.create(Math);
-    deterministicMath.random = () => {
+    return () => {
         seed = (seed * 1664525 + 1013904223) % 4294967296;
         return seed / 4294967296;
     };
-    const window = {};
-
-    createSudokuApp({ document, window, random: deterministicMath.random });
-
-    return { board: elements['sudoku-board'], message: elements.message, window };
 }
 
-function getRows(board) {
-    return board.children.map(row => row.children);
+function createGame() {
+    let renderer;
+    act(() => {
+        renderer = TestRenderer.create(
+            React.createElement(App, { random: createDeterministicRandom() })
+        );
+    });
+    return renderer;
 }
 
-function assertCluesAreConsistent(rows) {
+function getCells(renderer) {
+    return renderer.root.findAllByType('input');
+}
+
+function getRows(renderer) {
+    return renderer.root.findAllByProps({ className: 'sudoku-row' });
+}
+
+function getMessage(renderer) {
+    return renderer.root.findByProps({ id: 'message' }).children.join('');
+}
+
+function getMessageStyle(renderer) {
+    return renderer.root.findByProps({ id: 'message' }).props.style.color;
+}
+
+function clickButton(renderer, label) {
+    const button = renderer.root.findAllByType('button')
+        .find(element => element.children.join('') === label);
+    act(() => button.props.onClick());
+}
+
+function assertCluesAreConsistent(cells) {
+    const rows = [];
+    for (let row = 0; row < 9; row++) {
+        rows.push(cells.slice(row * 9, row * 9 + 9));
+    }
+
     const groups = [];
     for (let index = 0; index < 9; index++) {
         groups.push(rows[index]);
@@ -83,68 +69,77 @@ function assertCluesAreConsistent(rows) {
     }
 
     for (const group of groups) {
-        const clues = group.map(cell => cell.value).filter(Boolean);
+        const clues = group
+            .map(cell => cell.props.value)
+            .filter(Boolean);
         assert.equal(new Set(clues).size, clues.length);
     }
 }
 
 test('new game renders a valid 9-by-9 puzzle with 35 clues', () => {
-    const { board, message, window } = createGame();
-    const rows = getRows(board);
-    const cells = board.getElementsByTagName('input');
+    const renderer = createGame();
+    const rows = getRows(renderer);
+    const cells = getCells(renderer);
 
     assert.equal(rows.length, 9);
-    assert.ok(rows.every(row => row.length === 9));
     assert.equal(cells.length, 81);
-    assert.equal(cells.filter(cell => cell.disabled).length, 35);
-    assert.ok(cells.filter(cell => cell.disabled).every(cell => /^[1-9]$/.test(cell.value)));
-    assert.equal(message.innerHTML, '');
-    assertCluesAreConsistent(rows);
+    assert.equal(cells.filter(cell => cell.props.disabled).length, 35);
+    assert.ok(cells.filter(cell => cell.props.disabled)
+        .every(cell => /^[1-9]$/.test(cell.props.value)));
+    assert.equal(getMessage(renderer), '');
+    assertCluesAreConsistent(cells);
 
-    window.checkSolution();
-    assert.equal(message.innerHTML, 'Some cells are incorrect.');
-    assert.equal(message.style.color, '#d32f2f');
+    clickButton(renderer, 'Check Solution');
+    assert.equal(getMessage(renderer), 'Some cells are incorrect.');
+    assert.equal(getMessageStyle(renderer), '#d32f2f');
 
-    window.newGame();
-    assert.equal(board.getElementsByTagName('input').length, 81);
-    assert.equal(message.innerHTML, '');
+    clickButton(renderer, 'New Game');
+    assert.equal(getCells(renderer).length, 81);
+    assert.equal(getMessage(renderer), '');
 });
 
 test('editable cells accept only digits 1 through 9 and mark empty cells incorrect', () => {
-    const { board, window } = createGame();
-    const editableCell = board.getElementsByTagName('input').find(cell => !cell.disabled);
+    const renderer = createGame();
+    let editableCell = getCells(renderer).find(cell => !cell.props.disabled);
 
-    editableCell.value = 'a0x7';
-    editableCell.oninput();
-    assert.equal(editableCell.value, '7');
+    act(() => editableCell.props.onChange({ target: { value: 'a0x7' } }));
+    editableCell = getCells(renderer).find(cell => !cell.props.disabled);
+    assert.equal(editableCell.props.value, '7');
 
-    editableCell.value = '0';
-    editableCell.oninput();
-    assert.equal(editableCell.value, '');
+    act(() => editableCell.props.onChange({ target: { value: '0' } }));
+    editableCell = getCells(renderer).find(cell => !cell.props.disabled);
+    assert.equal(editableCell.props.value, '');
 
-    window.checkSolution();
-    assert.equal(editableCell.className, 'sudoku-cell incorrect');
+    clickButton(renderer, 'Check Solution');
+    editableCell = getCells(renderer).find(cell => !cell.props.disabled);
+    assert.equal(editableCell.props.className, 'sudoku-cell incorrect');
 });
 
 test('check solution congratulates the player when all cells match the solution', () => {
-    const { board, message, window } = createGame();
-    const editableCells = board.getElementsByTagName('input').filter(cell => !cell.disabled);
+    const renderer = createGame();
+    let editableCells = getCells(renderer).filter(cell => !cell.props.disabled);
 
-    for (const cell of editableCells) {
+    for (const originalCell of editableCells) {
+        const originalIndex = getCells(renderer).indexOf(originalCell);
         let foundCorrectValue = false;
+
         for (let value = 1; value <= 9; value++) {
-            cell.value = String(value);
-            cell.oninput();
-            window.checkSolution();
-            if (cell.className === 'sudoku-cell') {
+            act(() => getCells(renderer)[originalIndex].props.onChange({
+                target: { value: String(value) }
+            }));
+            clickButton(renderer, 'Check Solution');
+
+            const updatedCell = getCells(renderer)[originalIndex];
+            if (updatedCell.props.className === 'sudoku-cell') {
                 foundCorrectValue = true;
                 break;
             }
         }
+
         assert.ok(foundCorrectValue, 'each editable cell should have a matching solution value');
     }
 
-    window.checkSolution();
-    assert.equal(message.innerHTML, 'Congratulations! You solved it!');
-    assert.equal(message.style.color, '#388e3c');
+    clickButton(renderer, 'Check Solution');
+    assert.equal(getMessage(renderer), 'Congratulations! You solved it!');
+    assert.equal(getMessageStyle(renderer), '#388e3c');
 });
